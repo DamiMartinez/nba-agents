@@ -6,5 +6,5 @@ def get_current_date_tool(tool_context: ToolContext) -> str:
     """
     A tool that gets the current date.
     """
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return current_date
