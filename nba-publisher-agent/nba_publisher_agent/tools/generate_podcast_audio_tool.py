@@ -17,14 +17,15 @@ def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
         wf.writeframes(pcm)
         
 
-async def generate_podcast_audio(summary_report: str, tool_context: ToolContext, filename: str = "nba_daily_summary_podcast") -> Dict[str, str]:
+async def generate_podcast_audio(summary_report: str, tool_context: ToolContext) -> Dict[str, str]:
     """
     Generates audio from a podcast script using Gemini API and saves it as a WAV file.
+    The filename is automatically generated based on the current date in the format:
+    nba_daily_summary_podcast_YYYY-MM-DD.wav
 
     Args:
         summary_report: The summary report to be converted to audio.
         tool_context: The ADK tool context.
-        filename: Base filename for the audio file (without extension).
 
     Returns:
         Dictionary with status and file information.
@@ -50,8 +51,9 @@ async def generate_podcast_audio(summary_report: str, tool_context: ToolContext,
 
         data = response.candidates[0].content.parts[0].inline_data.data
 
-        if not filename.endswith(".wav"):
-            filename += ".wav"
+        # Generate deterministic filename based on current date
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        filename = f"nba_daily_summary_podcast_{current_date}.wav"
 
         # ** BUG FIX **: This logic now runs for all cases, not just when the extension is added.
         current_directory = pathlib.Path.cwd()

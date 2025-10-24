@@ -18,7 +18,7 @@ podcaster_agent = LlmAgent(
 
     Workflow:
     1. Receive the text script from the user or another agent.
-    2. Immediately call the `generate_podcast_audio` tool with the provided script and the filename of 'nba_daily_summary_podcast_<current_date>'.
+    2. Immediately call the `generate_podcast_audio` tool with the provided script.
     3. If the audio generation is successful, call the `upload_to_gcs` tool to upload the audio file to the GCS bucket.
     4. Report the result of the audio generation back to the user.
     """,
