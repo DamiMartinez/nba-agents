@@ -4,8 +4,6 @@ An AI-powered NBA podcast generation system built with Google's Agent Developmen
 
 ## 🏀 Overview
 
-As an NBA fan living in Spain, I wake up every morning eager to catch up on the previous night's games. This project automates that daily ritual by creating a personalized NBA morning podcast using AI agents.
-
 The system consists of two main agents that work together to gather NBA data, create engaging content, produce audio using Gemini's TTS, and distribute automatically via RSS feed to Spotify.
 
 ## 🎧 Live Podcast
@@ -51,13 +49,46 @@ The blog post covers:
 
 3. **Set up environment variables:**
    ```bash
+   export GOOGLE_API_KEY="your-google-ai-api-key"
+   export GOOGLE_CLOUD_PROJECT="your-project-id"
    export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-key.json"
    ```
 
-4. **Run the agent:**
+4. **Run the agent programmatically:**
    ```bash
-   poetry run python -m nba_publisher_agent.agent
+   # Method 1: Direct execution
+   python run_agent.py
+   
+   # Method 2: Using poetry
+   poetry run python run_agent.py
+   
+   # Method 3: Interactive Python
+   python -c "
+   import asyncio
+   from run_agent import run_nba_agent
+   asyncio.run(run_nba_agent())
+   "
    ```
+
+### What the Agent Does
+
+The NBA Publisher Agent performs the following steps programmatically:
+
+1. **Gets current date** (Europe/Madrid timezone)
+2. **Fetches last night's NBA results** and top scorers
+3. **Searches for additional game highlights** using Google Search
+4. **Gets tonight's NBA schedule**
+5. **Creates a summary report** following the NBA Summary Report Template
+6. **Generates a podcast script** from the summary
+7. **Converts the script to audio** using the podcaster agent
+8. **Uploads the audio to Google Cloud Storage**
+
+### Output
+
+The agent generates:
+- **Text summary**: Saved as `nba_summary_YYYYMMDD_HHMMSS.txt`
+- **Audio podcast**: Saved as `nba_daily_summary_podcast_YYYY-MM-DD.wav` in the `audios/` directory
+- **Console output**: Shows the agent's progress and final response
 
 ### Configuration
 
@@ -72,6 +103,7 @@ The system is configured for Europe/Madrid timezone by default. To modify:
 ```
 nba-agents/
 ├── nba-publisher-agent/
+│   ├── run_agent.py                 # Programmatic execution script
 │   ├── nba_publisher_agent/
 │   │   ├── agent.py                 # Main agent definitions
 │   │   └── tools/

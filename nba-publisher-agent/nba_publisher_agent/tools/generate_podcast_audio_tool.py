@@ -55,7 +55,6 @@ async def generate_podcast_audio(summary_report: str, tool_context: ToolContext)
         current_date = datetime.now().strftime("%Y-%m-%d")
         filename = f"nba_daily_summary_podcast_{current_date}.wav"
 
-        # ** BUG FIX **: This logic now runs for all cases, not just when the extension is added.
         current_directory = pathlib.Path.cwd()
         audios_directory = current_directory / "audios"
         
