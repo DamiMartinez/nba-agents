@@ -1,0 +1,45 @@
+[project]
+name = "nba-publisher-agent"
+version = "0.1.0"
+description = "NBA AI Agent that creates daily summary podcasts about NBA games using Google ADK"
+authors = [
+        { name = "Damian Martinez Carmona", email = "damian.martinez.carmona@gmail.com" },
+]
+
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic-settings = "^2.11.0"
+tabulate = "^0.9.0"
+google-auth = "^2.41.1"
+requests = "^2.32.5"
+google-adk = "^1.16.0"
+google-cloud-aiplatform = { extras = [
+        "adk",
+        "agent-engines",
+], version = "^1.120.0" }
+google-cloud-storage = "^2.19.0"
+google-genai = "^1.46.0"
+nba_api = "^1.10.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+pytest-mock = "^3.15.1"
+scikit-learn = "^1.7.2"
+pytest-cov = "^6.3.0"
+pytest-asyncio = "^0.26.0"
+black = "^25.9.0"
+
+[tool.poetry.group.deployment]
+optional = true
+
+[tool.poetry.group.deployment.dependencies]
+absl-py = "^2.3.0"
+cloudpickle = "^3.1.1"
+flake8-pyproject = "^1.2.3"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
