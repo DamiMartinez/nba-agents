@@ -1,0 +1,91 @@
+name: Daily NBA Agent Execution
+
+on:
+  schedule:
+    # Run daily at 8am Madrid time (6am UTC = 8am CEST, 7am CET)
+    # Using 6am UTC to ensure it runs at or after 8am Madrid time year-round
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: nba-publisher-agent/.venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('nba-publisher-agent/poetry.lock') }}
+      
+      - name: Install dependencies
+        working-directory: ./nba-publisher-agent
+        run: |
+          poetry install --no-interaction --no-root
+          poetry install --no-interaction
+      
+      - name: Set timezone to Madrid
+        run: |
+          sudo timedatectl set-timezone Europe/Madrid
+          echo "Current time: $(TZ=Europe/Madrid date)"
+      
+      - name: Set up Google Cloud credentials
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
+            # Create credentials file in /tmp with restrictive permissions (read/write for owner only)
+            CREDENTIALS_FILE="/tmp/gcp-credentials-${GITHUB_RUN_ID}.json"
+            echo "$GOOGLE_CREDENTIALS_JSON" > "$CREDENTIALS_FILE"
+            chmod 600 "$CREDENTIALS_FILE"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE" >> $GITHUB_ENV
+            echo "Google Cloud credentials configured securely"
+          else
+            echo "Warning: GOOGLE_APPLICATION_CREDENTIALS secret not set. GCS uploads may fail."
+          fi
+      
+      - name: Run NBA Agent
+        working-directory: ./nba-publisher-agent
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          # Add any other environment variables as GitHub Secrets if needed
+          # Example: API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          poetry run python run_agent.py
+      
+      - name: Clean up credentials
+        if: always()
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
+            echo "Credentials file cleaned up"
+          fi
+      
+      - name: Upload generated audio files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-podcast-audio-${{ github.run_number }}
+          path: nba-publisher-agent/audios/*.wav
+          retention-days: 30
+          if-no-files-found: ignore
+

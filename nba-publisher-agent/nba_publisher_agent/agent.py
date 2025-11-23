@@ -9,6 +9,16 @@ from .tools.upload_to_gcs_tool import upload_to_gcs
 from .tools.get_last_night_results_tool import get_last_night_results
 from .tools.get_tonight_schedule_tool import get_tonight_schedule_tool
 
+
+search_agent = LlmAgent(
+    model='gemini-2.5-flash',
+    name='SearchAgent',
+    instruction="""
+    You're a specialist in Google Search
+    """,
+    tools=[google_search],
+)
+
 podcaster_agent = LlmAgent(
     name="podcaster_agent",
     model="gemini-2.5-flash",
@@ -45,7 +55,7 @@ root_agent = LlmAgent(
     **Execution Plan:**
     *   **Step 1:** Call `get_current_date_tool` to get the current date. The date MUST be formatted in human readable format. The current date and time is based on Europe/Madrid time zone.
     *   **Step 2:** Call `get_last_night_results` to get the last night's NBA games results and top scorers. If no games were played yesterday, state: "No NBA games were played yesterday."
-    *   **Step 3:** Call `google_search` to find additional information and highlights about last night's games.
+    *   **Step 3:** Call `search_agent` to find additional information and highlights about last night's games.
     *   **Step 4:** Call `get_tonight_schedule_tool` to get tonight's NBA games schedule. If no games are scheduled for tonight, state: "No NBA games are scheduled for tonight."
     *   **Step 5:** Create a summary report following the **NBA Summary Report Template** schema.
     *   **Step 6:** Create Podcast Script. After saving the `summary_report`, you MUST convert the summary report into a natural language daily summary podcast script. Make it casual, engaging and informative. The podcast script MUST follow the **Podcast Script Schema** structure. The podcast script has an introduction, a first section with the last night's games results and most relevant information about each game, a second section where you talk about tonight's games schedule and a third section where you conclude with a goodbye message.
@@ -89,7 +99,7 @@ root_agent = LlmAgent(
     ```
     """,
     tools=[
-        google_search,
+        AgentTool(agent=search_agent),
         get_current_date_tool,
         get_last_night_results,
         get_tonight_schedule_tool,
