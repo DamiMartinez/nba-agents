@@ -74,16 +74,26 @@ async def run_nba_agent():
         final_response = None
         async for event in events:
             if hasattr(event, 'is_final_response') and event.is_final_response():
-                final_response = event.content.parts[0].text
-                print("=" * 80)
-                print("AGENT RESPONSE:")
-                print("=" * 80)
-                print(final_response)
-                print("=" * 80)
+                # Check if content exists and has parts before accessing
+                if hasattr(event, 'content') and event.content:
+                    if hasattr(event.content, 'parts') and event.content.parts:
+                        # Extract text from text parts
+                        text_parts = [part.text for part in event.content.parts if hasattr(part, 'text') and part.text]
+                        if text_parts:
+                            final_response = ' '.join(text_parts)
+                            print("=" * 80)
+                            print("AGENT RESPONSE:")
+                            print("=" * 80)
+                            print(final_response)
+                            print("=" * 80)
             elif hasattr(event, 'content') and event.content:
                 # Print intermediate responses
                 if hasattr(event.content, 'parts') and event.content.parts:
-                    print(f"Intermediate: {event.content.parts[0].text}")
+                    text_parts = [part.text for part in event.content.parts if hasattr(part, 'text') and part.text]
+                    if text_parts:
+                        print(f"Intermediate: {' '.join(text_parts)}")
+                    else:
+                        print(f"Intermediate: {type(event.content).__name__} (non-text parts)")
         
         # Check if we got a final response
         if final_response:
