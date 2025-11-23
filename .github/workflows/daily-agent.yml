@@ -39,7 +39,6 @@ jobs:
         working-directory: ./nba-publisher-agent
         run: |
           poetry install --no-interaction --no-root
-          poetry install --no-interaction
       
       - name: Set timezone to Madrid
         run: |
