@@ -63,9 +63,15 @@ jobs:
       - name: Run NBA Agent
         working-directory: ./nba-publisher-agent
         env:
+          # Google Cloud credentials
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
-          # Add any other environment variables as GitHub Secrets if needed
-          # Example: API_KEY: ${{ secrets.API_KEY }}
+          # Google Cloud configuration
+          GOOGLE_CLOUD_PROJECT: blog-content-manager-tag
+          GOOGLE_CLOUD_LOCATION: us-central1
+          # Google AI API configuration
+          GOOGLE_GENAI_USE_VERTEXAI: "0"
+          # Required: Set GOOGLE_API_KEY as a GitHub Secret in repository settings
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           poetry run python run_agent.py
       
