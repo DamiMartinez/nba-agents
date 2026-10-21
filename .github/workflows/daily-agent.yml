@@ -2,35 +2,48 @@ name: Daily NBA Agent Execution
 
 on:
   schedule:
-    # Run daily at 8am Madrid time (6am UTC = 8am CEST, 7am CET)
-    # Using 6am UTC to ensure it runs at or after 8am Madrid time year-round
-    - cron: '0 6 * * *'
-  workflow_dispatch: # Allow manual triggering
+    # Scheduling follows Madrid DST; podcast dates/times remain New York time.
+    - cron: '0 11 * * *'
+      timezone: 'Europe/Madrid'
+  workflow_dispatch:
+    inputs:
+      edition_date:
+        description: 'Eastern (New York) edition date YYYY-MM-DD (blank = today in New York)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nba-daily-publisher
+  cancel-in-progress: false
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       
       - name: Set up Python
         id: setup-python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: latest
+          version: '2.5.1'
           virtualenvs-create: true
           virtualenvs-in-project: true
       
       - name: Load cached venv
         id: cached-poetry-dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: nba-publisher-agent/.venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('nba-publisher-agent/poetry.lock') }}
@@ -38,12 +51,8 @@ jobs:
       - name: Install dependencies
         working-directory: ./nba-publisher-agent
         run: |
-          poetry install --no-interaction --no-root
-      
-      - name: Set timezone to Madrid
-        run: |
-          sudo timedatectl set-timezone Europe/Madrid
-          echo "Current time: $(TZ=Europe/Madrid date)"
+          poetry check --lock
+          poetry install --no-interaction --only main
       
       - name: Set up Google Cloud credentials
         env:
@@ -51,9 +60,9 @@ jobs:
         run: |
           if [ -n "$GOOGLE_CREDENTIALS_JSON" ]; then
             # Create credentials file in /tmp with restrictive permissions (read/write for owner only)
-            CREDENTIALS_FILE="/tmp/gcp-credentials-${GITHUB_RUN_ID}.json"
-            echo "$GOOGLE_CREDENTIALS_JSON" > "$CREDENTIALS_FILE"
-            chmod 600 "$CREDENTIALS_FILE"
+            umask 077
+            CREDENTIALS_FILE="$(mktemp "${RUNNER_TEMP}/gcp-credentials.XXXXXX.json")"
+            printf '%s' "$GOOGLE_CREDENTIALS_JSON" > "$CREDENTIALS_FILE"
             echo "GOOGLE_APPLICATION_CREDENTIALS=$CREDENTIALS_FILE" >> $GITHUB_ENV
             echo "Google Cloud credentials configured securely"
           else
@@ -63,6 +72,7 @@ jobs:
       - name: Run NBA Agent
         working-directory: ./nba-publisher-agent
         env:
+          EDITION_DATE: ${{ inputs.edition_date }}
           # Google Cloud credentials
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           # Google Cloud configuration
@@ -73,7 +83,11 @@ jobs:
           # Required: Set GOOGLE_API_KEY as a GitHub Secret in repository settings
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
-          poetry run python run_agent.py
+          args=()
+          if [ -n "$EDITION_DATE" ]; then
+            args+=(--edition-date "$EDITION_DATE")
+          fi
+          poetry run python run_agent.py "${args[@]}"
       
       - name: Clean up credentials
         if: always()
@@ -87,10 +101,12 @@ jobs:
       
       - name: Upload generated audio files
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: nba-podcast-audio-${{ github.run_number }}
-          path: nba-publisher-agent/audios/*.wav
+          name: nba-podcast-output-${{ github.run_number }}
+          path: |
+            nba-publisher-agent/audios/*.wav
+            nba-publisher-agent/reports/*
           retention-days: 30
           if-no-files-found: ignore
 

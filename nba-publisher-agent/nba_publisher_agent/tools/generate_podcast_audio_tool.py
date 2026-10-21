@@ -1,76 +1,84 @@
-import wave
-from typing import Dict
+"""Generate WAV audio using the Gemini 3.8 Interactions TTS API."""
+
+import asyncio
+import base64
+import io
 import pathlib
+import wave
+from datetime import date
 
-from google.adk.tools.tool_context import ToolContext
 from google import genai
-from google.genai import types
-from datetime import datetime
+from google.adk.tools.tool_context import ToolContext
+
+from ..config import TTS_MODEL, TTS_VOICE
+from ..game_data import collect_edition, edition_date
 
 
-def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
-    """Helper function to save audio data as a wave file"""
-    with wave.open(filename, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(rate)
-        wf.writeframes(pcm)
-        
-
-async def generate_podcast_audio(summary_report: str, tool_context: ToolContext) -> Dict[str, str]:
-    """
-    Generates audio from a podcast script using Gemini API and saves it as a WAV file.
-    The filename is automatically generated based on the current date in the format:
-    nba_daily_summary_podcast_YYYY-MM-DD.wav
-
-    Args:
-        summary_report: The summary report to be converted to audio.
-        tool_context: The ADK tool context.
-
-    Returns:
-        Dictionary with status and file information.
-    """
+async def generate_podcast_audio(
+    summary_report: str, tool_context: ToolContext
+) -> dict:
+    """Generate the edition's podcast; refuse publication without complete game data."""
+    tool_context.state["audio_generated"] = False
+    tool_context.state["audio_uploaded"] = False
     try:
-        client = genai.Client()
-        prompt = f"TTS the following summary report narrated by Rasalgethi:\n\n{summary_report}"
-
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-preview-tts",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name='Rasalgethi',
-                        )
-                    )
-                )
+        day = tool_context.state.get("edition_date", edition_date().isoformat())
+        if not tool_context.state.get("nba_edition"):
+            tool_context.state["nba_edition"] = await asyncio.to_thread(
+                collect_edition, date.fromisoformat(day)
             )
-        )
-
-        data = response.candidates[0].content.parts[0].inline_data.data
-
-        # Generate deterministic filename based on current date
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        filename = f"nba_daily_summary_podcast_{current_date}.wav"
-
-        current_directory = pathlib.Path.cwd()
-        audios_directory = current_directory / "audios"
-        
-        # Create audios directory if it doesn't exist
-        audios_directory.mkdir(exist_ok=True)
-        
-        file_path = audios_directory / filename
-        wave_file(str(file_path), data)
-
+        results = tool_context.state["nba_edition"]["results"]
+        if results.get("status") != "ok" or results.get("unresolved_game_ids"):
+            raise ValueError("Cannot generate audio from incomplete results")
+        if not summary_report.strip():
+            raise ValueError("Podcast script is empty")
+        reports = pathlib.Path.cwd() / "reports"
+        reports.mkdir(exist_ok=True)
+        (reports / f"nba_{day}.script.txt").write_text(summary_report, encoding="utf-8")
+        tool_context.state["podcast_script"] = summary_report
+        async with genai.Client(http_options={"timeout": 180_000}).aio as client:
+            interaction = await client.interactions.create(
+                model=TTS_MODEL,
+                input=[
+                    {
+                        "type": "user_input",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": summary_report,
+                                "annotations": [
+                                    {
+                                        "type": "speech_metadata",
+                                        "style": "Engaging, informative sports podcast narration",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                response_format={"type": "audio", "mime_type": "audio/wav"},
+                generation_config={"speech_config": [{"voice": TTS_VOICE}]},
+            )
+        audio = interaction.output_audio
+        if not audio or not audio.data:
+            raise ValueError("TTS returned no audio")
+        data = base64.b64decode(audio.data, validate=True)
+        # Unary 3.8 TTS already returns a WAV container; don't wrap it in another.
+        with wave.open(io.BytesIO(data), "rb") as wav:
+            if not wav.getnframes():
+                raise ValueError("TTS returned empty WAV audio")
+        directory = pathlib.Path.cwd() / "audios"
+        directory.mkdir(exist_ok=True)
+        file_path = directory / f"nba_daily_summary_podcast_{day}.wav"
+        file_path.write_bytes(data)
+        tool_context.state["audio_generated"] = True
+        tool_context.state["audio_file_path"] = str(file_path.resolve())
         return {
             "status": "success",
-            "message": f"Successfully generated and saved podcast audio to {file_path.resolve()}",
             "file_path": str(file_path.resolve()),
-            "file_size": len(data)
+            "file_size": len(data),
         }
-
-    except Exception as e:
-        error_msg = str(e)[:200]
-        return {"status": "error", "message": f"Audio generation failed: {error_msg}"}
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"Audio generation failed ({type(exc).__name__})",
+        }

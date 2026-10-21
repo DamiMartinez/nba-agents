@@ -1,193 +1,136 @@
 # NBA AI Agents
 
-An AI-powered NBA podcast generation system built with Google's Agent Development Kit (ADK) that automatically creates daily audio summaries of NBA games.
+Daily NBA podcast generation using Google ADK, ESPN scoreboard data, Gemini speech synthesis, and Google Cloud Storage.
 
-## 🏀 Overview
+[Spotify](https://open.spotify.com/show/5u255pZEvJeOzKMWCuDQsP) · [RSS feed](https://damimartinez.github.io/nba-daily-summary-podcast/podcast/rss.xml) · [Original technical write-up](https://damimartinez.github.io/nba-podcast-using-adk/)
 
-The system consists of two main agents that work together to gather NBA data, create engaging content, produce audio using Gemini's TTS, and distribute automatically via RSS feed to Spotify.
+## Requirements and installation
 
-## 🎧 Live Podcast
+- Python 3.11+ (CI tests 3.11–3.13), Poetry 2.5.1
+- Google AI API access for text, Search grounding, and TTS
+- Google Cloud credentials with upload and object-ACL permissions for the configured bucket
 
-**Listen to the NBA Daily Summary Podcast:**
-- [Spotify](https://open.spotify.com/show/5u255pZEvJeOzKMWCuDQsP)
-- [RSS Feed](https://damimartinez.github.io/nba-daily-summary-podcast/podcast/rss.xml)
-
-## 📖 Detailed Technical Blog Post
-
-For a comprehensive breakdown of the architecture, implementation details, and technical deep dive, check out my blog post:
-
-**[How I Built an AI-Generated NBA Podcast with Google's ADK](https://damimartinez.github.io/nba-podcast-using-adk/)**
-
-The blog post covers:
-- Multi-agent system architecture
-- NBA API integration strategies
-- Gemini TTS implementation
-- RSS feed automation
-- Spotify distribution setup
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.11+
-- Google Cloud Platform account
-- Google ADK access
-- NBA API access
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/DamiMartinez/nba-agents.git
-   cd nba-agents/nba-publisher-agent
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   poetry install
-   ```
-
-3. **Set up environment variables:**
-   ```bash
-   export GOOGLE_API_KEY="your-google-ai-api-key"
-   export GOOGLE_CLOUD_PROJECT="your-project-id"
-   export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-key.json"
-   ```
-
-4. **Run the agent programmatically:**
-   ```bash
-   # Method 1: Direct execution
-   python run_agent.py
-   
-   # Method 2: Using poetry
-   poetry run python run_agent.py
-   
-   # Method 3: Interactive Python
-   python -c "
-   import asyncio
-   from run_agent import run_nba_agent
-   asyncio.run(run_nba_agent())
-   "
-   ```
-
-### What the Agent Does
-
-The NBA Publisher Agent performs the following steps programmatically:
-
-1. **Gets current date** (Europe/Madrid timezone)
-2. **Fetches last night's NBA results** and top scorers
-3. **Searches for additional game highlights** using Google Search
-4. **Gets tonight's NBA schedule**
-5. **Creates a summary report** following the NBA Summary Report Template
-6. **Generates a podcast script** from the summary
-7. **Converts the script to audio** using the podcaster agent
-8. **Uploads the audio to Google Cloud Storage**
-
-### Output
-
-The agent generates:
-- **Text summary**: Saved as `nba_summary_YYYYMMDD_HHMMSS.txt`
-- **Audio podcast**: Saved as `nba_daily_summary_podcast_YYYY-MM-DD.wav` in the `audios/` directory
-- **Console output**: Shows the agent's progress and final response
-
-### Configuration
-
-The system is configured for Europe/Madrid timezone by default. To modify:
-
-1. Update timezone references in `agent.py`
-2. Adjust date formatting in tool functions
-3. Modify RSS feed update schedule in GitHub Actions
-
-## 📁 Project Structure
-
-```
-nba-agents/
-├── nba-publisher-agent/
-│   ├── run_agent.py                 # Programmatic execution script
-│   ├── nba_publisher_agent/
-│   │   ├── agent.py                 # Main agent definitions
-│   │   └── tools/
-│   │       ├── generate_podcast_audio_tool.py
-│   │       ├── get_current_date_tool.py
-│   │       ├── get_last_night_results_tool.py
-│   │       ├── get_tonight_schedule_tool.py
-│   │       └── upload_to_gcs_tool.py
-│   ├── audios/                      # Generated audio files
-│   └── pyproject.toml              # Dependencies and configuration
-└── README.md
+```bash
+git clone git@github.com:DamiMartinez/nba-agents.git
+cd nba-agents/nba-publisher-agent
+poetry install
 ```
 
-## 🛠️ Customization
+Configure these environment variables locally or through your CI secret store. Never commit credentials:
 
-The system is highly customizable:
-- **Voice Selection**: Choose from 30 available Gemini TTS voices
-- **Content Formatting**: Modify report templates in `agent.py`
-- **Timezone**: Currently configured for Europe/Madrid timezone
-- **Scheduling**: Adjust GitHub Actions cron schedule for different timing
+```bash
+export GOOGLE_API_KEY="<your-google-ai-api-key>"
+export GOOGLE_GENAI_USE_VERTEXAI="0"
+export GOOGLE_CLOUD_PROJECT="<your-project-id>"
+export GOOGLE_APPLICATION_CREDENTIALS="<absolute-path-to-service-account-json>"
+```
 
-See the [blog post](https://damimartinez.github.io/nba-podcast-using-adk/) for detailed customization examples.
+The upload tool currently defaults to the existing `nba_daily_summary_podcast_audios` bucket and makes objects public. Configure the bucket argument in the tool if deploying elsewhere; review its public-access policy first.
 
-## 📊 Features
+### Models
 
-- **Automated Daily Generation**: Runs automatically every morning
-- **Multi-Source Data**: Combines NBA API, Google Search, and official NBA endpoints
-- **Professional Audio**: High-quality TTS with controllable voice styling
-- **Cloud Distribution**: Automatic upload and RSS feed updates
-- **Timezone Aware**: Configured for Europe/Madrid timezone
-- **Error Handling**: Robust error handling and fallback mechanisms
-- **Modular Design**: Easy to extend and customize
+Defaults, checked against [Google's model catalog](https://ai.google.dev/gemini-api/docs/models) and [TTS guide](https://ai.google.dev/gemini-api/docs/speech-generation) on October 21, 2026:
 
-## 🔧 Dependencies
+| Setting | Default |
+| --- | --- |
+| `NBA_AGENT_MODEL` | `gemini-3.8-flash` |
+| `NBA_TTS_MODEL` | `gemini-3.8-flash-tts` |
+| `NBA_TTS_VOICE` | `Rasalgethi` |
 
-### Core Dependencies
-- `google-adk` - Agent Development Kit framework
-- `google-cloud-aiplatform` - AI Platform integration
-- `google-genai` - Gemini TTS capabilities
-- `google-cloud-storage` - Cloud storage integration
-- `nba_api` - NBA data access
-- `requests` - HTTP requests
+Text/search/podcast agents share the text model setting. TTS uses the Interactions API with verbatim transcript input and WAV output (GenAI SDK 2.32+). Model availability, billing, and quotas must be checked for your account. The TTS override must support this Interactions API contract; older 2.5 TTS IDs are **not** drop-in replacements.
 
-### Development Dependencies
-- `pytest` - Testing framework
-- `black` - Code formatting
-- `pytest-cov` - Coverage reporting
+## Run
 
-## 📈 Future Enhancements
+```bash
+poetry run python run_agent.py
+# Historical or explicitly dated edition:
+poetry run python run_agent.py --edition-date 2026-10-21
+# No LLM calls, uploads, or Google credentials required:
+poetry run python run_agent.py --collect-only --edition-date 2026-10-21
+# Optional interactive ADK UI (does not use the runner's preflight/wait loop):
+poetry run adk web
+```
 
-- Multiple voice styles for different content types
-- Multi-language support (Spanish, etc.)
-- Advanced analytics and game predictions
-- Social media integration
-- Interactive voice features
+### What “last night” means
 
-## 🤝 Contributing
+An edition dated **D in America/New_York (Eastern Time)** covers:
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+- **Results:** games whose scheduled tip-off falls on **D−1 in America/New_York**.
+- **Upcoming schedule:** games whose scheduled tip-off falls on **D in America/New_York**.
+- **Display:** full dates and timezone-aware times in **America/New_York**, labeled ET (EST in winter / EDT in summer).
+- **Episode date, audio filename, report date, and RSS date selection:** the same Eastern edition date.
 
-### Development Setup
+For example, the January 2 Eastern edition includes January 1 afternoon games **and** the January 1 10:30 PM ET game, even though the latter's UTC timestamp falls on January 2. It previews games starting January 2 Eastern time. A game finishing after midnight remains attached to its tip-off date. A rescheduled game follows the source's updated tip-off date.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+All user-facing dates/times and clock reads use `America/New_York`, independent of the host's timezone. `zoneinfo` applies US daylight saving automatically; summer is EDT, not EST. Europe changing clocks has no effect. UTC source timestamps are retained only for internal auditing; never narrate them or apply fixed offsets.
 
-## 📄 License
+### Collection and failure behavior
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+1. Freeze the edition date at startup.
+2. Query ESPN's NBA scoreboard for the target date and both adjacent dates, with an explicit result limit. Filter using the actual Eastern tip-off date; deduplicate by game ID.
+3. Include all season types exposed by the source: no hard-coded season year or regular-season/playoffs-only filter. Preserve scores, points leaders, game status, and UTC/Eastern source timestamps. Completed games also fetch structured box scores and recap text; structured player statistics and starter roles override stale recap/search claims. Unavailable details are flagged and extra numerical claims must be omitted.
+4. Retry transient HTTP failures. Invalid responses, failed adjacent queries, and malformed events are errors, **not** evidence of no games.
+5. If a result is still scheduled, delayed, or live, poll every five minutes for up to 30 minutes; fail without generating/uploading audio if it remains unresolved. Postponed/cancelled games remain visible but do not require a final score.
+6. Freeze both successful slates in ADK session state before invoking the LLM. Search only supplies additional highlights.
+7. Require both a final root-agent response and a confirmed upload before returning exit code 0.
 
-## 🙏 Acknowledgments
+ESPN's public scoreboard is undocumented and has no availability or completeness guarantee. The current collector fails closed on observable errors but cannot detect a valid-looking response that silently omits an event. See [the review](docs/code-review.md) for remaining risks.
 
-- [Google ADK Course](https://www.deeplearning.ai/short-courses/building-live-voice-agents-with-googles-adk/) by Lavi Nigam and Sita Lakshmi Sangameswaran
-- [NBA API](https://github.com/swar/nba_api) by Swar Patel
-- [Google Gemini TTS](https://ai.google.dev/gemini-api/docs/speech-generation) for audio generation
+### Outputs
 
-## 📞 Contact
+Inside `nba-publisher-agent/`:
 
-**Damian Martinez Carmona**
-- Email: damian.martinez.carmona@gmail.com
-- GitHub: [@DamiMartinez](https://github.com/DamiMartinez)
+- `reports/nba_YYYY-MM-DD.json`: frozen source snapshot, including game IDs, collection timestamps, and queried dates.
+- `reports/nba_YYYY-MM-DD.md`: final agent report after confirmed publication.
+- `reports/nba_YYYY-MM-DD.script.txt`: exact narration submitted to TTS (saved before the API request).
+- `audios/nba_daily_summary_podcast_YYYY-MM-DD.wav`: generated audio.
 
----
+Local output folders are ignored by Git. Daily Actions runs retain reports/audio as artifacts. This repository uploads audio; it does **not** implement the downstream RSS/Spotify feed updater. Re-running an edition can replace its audio object; cross-run idempotency is not yet implemented.
 
-**Built with ❤️ for NBA fans everywhere**
+## Development
+
+```bash
+cd nba-publisher-agent
+poetry check --lock
+poetry run pytest --cov=nba_publisher_agent --cov=run_agent --cov-report=term-missing
+poetry run black --check .
+poetry build
+```
+
+Tests mock network, LLM, and storage calls; they require no credentials. Coverage includes midnight/date boundaries, DST transitions and mismatch weeks, duplicate games, all season types, incomplete results, postponed/cancelled games, source failures, WAV validation, and publication failure handling.
+
+`poetry.lock` pins the complete dependency graph. To update it deliberately, edit dependency constraints, run `poetry lock`, and rerun checks. Unused NBA API, AI Platform/deployment extras, and unrelated ML/test dependencies were removed; `python-dotenv` is now explicit.
+
+## Automation
+
+- `.github/workflows/tests.yml`: tests, formatting, dependency validation, and package build on pushes/PRs.
+- Both daily workflows start at **11:00 AM Europe/Madrid**, using GitHub's native `timezone` setting so Spain's DST changes are automatic. This timezone controls scheduling only: edition dates, game times, narration, filenames, and RSS dates remain **America/New_York**.
+- The downstream `nba-daily-summary-podcast` publisher waits up to **90 minutes** for the canonical audio upload, then updates RSS. Publication follows successful generation; it is not guaranteed to occur at exactly 11:00, and GitHub can delay scheduled runs. A missing upload after the deadline fails visibly instead of silently skipping the episode.
+- Both workflows accept the same **Eastern** `edition_date` for manual/backfill runs.
+- Activation requires merging the task PRs into each repository's default branch and enabling both previously disabled scheduled workflows. Enabling before merge would run the old default-branch code.
+- Daily workflow secrets: `GOOGLE_API_KEY` and `GOOGLE_APPLICATION_CREDENTIALS` (the JSON credential document). Temporary credential files are permission-restricted and cleaned up.
+
+## Structure
+
+```text
+nba-publisher-agent/
+  run_agent.py                   # deterministic collection, wait loop, runner
+  nba_publisher_agent/
+    agent.py                     # research/production/podcaster agents
+    config.py                    # overridable model defaults
+    game_data.py                 # shared date-safe scoreboard collector
+    tools/                       # ADK wrappers, audio generation, upload
+  tests/
+  pyproject.toml
+  poetry.lock
+docs/code-review.md               # findings and follow-up priorities
+```
+
+## Author and contributing
+
+Author: [DamiMartinez](https://github.com/DamiMartinez) (Damian Martinez Carmona).
+Contributions are welcome via pull request; include tests for behavioral changes.
+
+## License
+
+[MIT](LICENSE).
