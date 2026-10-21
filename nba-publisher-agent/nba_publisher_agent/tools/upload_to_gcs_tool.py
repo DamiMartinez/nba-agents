@@ -4,10 +4,14 @@ from google.cloud import storage
 from google.adk.tools.tool_context import ToolContext
 
 
-def upload_to_gcs(local_file_path: str, tool_context: ToolContext, bucket_name: str = "nba_daily_summary_podcast_audios") -> Dict[str, str]:
+def upload_to_gcs(
+    local_file_path: str,
+    tool_context: ToolContext,
+    bucket_name: str = "nba_daily_summary_podcast_audios",
+) -> Dict[str, str]:
     """
     Uploads an audio file to Google Cloud Storage and makes it publicly accessible.
-    
+
     Authentication is handled via GOOGLE_APPLICATION_CREDENTIALS environment variable
     pointing to a service account JSON key file.
 
@@ -19,6 +23,14 @@ def upload_to_gcs(local_file_path: str, tool_context: ToolContext, bucket_name: 
     Returns:
         Dictionary with status and file information including public URL.
     """
+    tool_context.state["audio_uploaded"] = False
+    if not tool_context.state.get(
+        "audio_generated"
+    ) or local_file_path != tool_context.state.get("audio_file_path"):
+        return {
+            "status": "error",
+            "message": "Only the current edition's generated audio can be uploaded",
+        }
     try:
         # Check if GOOGLE_APPLICATION_CREDENTIALS is set
         credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -26,32 +38,33 @@ def upload_to_gcs(local_file_path: str, tool_context: ToolContext, bucket_name: 
             return {
                 "status": "error",
                 "message": "GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Please set it to the path of your service account JSON key file.",
-                "file_path": local_file_path
+                "file_path": local_file_path,
             }
-        
+
         # Verify the credentials file exists
         if not os.path.exists(credentials_path):
             return {
                 "status": "error",
                 "message": f"Service account credentials file not found at: {credentials_path}",
-                "file_path": local_file_path
+                "file_path": local_file_path,
             }
-        
+
         # Initialize GCS client (will automatically use GOOGLE_APPLICATION_CREDENTIALS)
         client = storage.Client()
         bucket = client.bucket(bucket_name)
-        
+
         # Extract filename from path for destination blob name
         filename = os.path.basename(local_file_path)
         destination_blob_name = filename
-        
+
         # Upload file
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(local_file_path)
-        
+
         # Make the file public
         blob.make_public()
-        
+
+        tool_context.state["audio_uploaded"] = True
         return {
             "status": "success",
             "message": f"Successfully uploaded {filename} to GCS bucket '{bucket_name}'",
@@ -59,13 +72,13 @@ def upload_to_gcs(local_file_path: str, tool_context: ToolContext, bucket_name: 
             "destination_blob_name": destination_blob_name,
             "bucket_name": bucket_name,
             "public_url": blob.public_url,
-            "file_size": blob.size
+            "file_size": blob.size,
         }
-        
+
     except Exception as e:
-        error_msg = str(e)[:200]
+        error_msg = type(e).__name__
         return {
-            "status": "error", 
+            "status": "error",
             "message": f"GCS upload failed: {error_msg}",
-            "file_path": local_file_path
+            "file_path": local_file_path,
         }

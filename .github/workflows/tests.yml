@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    defaults:
+      run:
+        working-directory: nba-publisher-agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: snok/install-poetry@v1
+        with:
+          version: '2.5.1'
+      - run: poetry check --lock
+      - run: poetry install --no-interaction
+      - run: poetry run black --check .
+      - run: poetry run pytest --cov=nba_publisher_agent --cov=run_agent --cov-report=term-missing
+      - run: poetry build
