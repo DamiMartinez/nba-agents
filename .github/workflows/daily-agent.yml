@@ -2,8 +2,8 @@ name: Daily NBA Agent Execution
 
 on:
   schedule:
-    # Scheduling follows Madrid DST; podcast dates/times remain New York time.
-    - cron: '0 11 * * *'
+    # Avoid the top-of-hour scheduler peak; content dates remain New York time.
+    - cron: '10 11 * * *'
       timezone: 'Europe/Madrid'
   workflow_dispatch:
     inputs:

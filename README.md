@@ -104,8 +104,8 @@ Tests mock network, LLM, and storage calls; they require no credentials. Coverag
 ## Automation
 
 - `.github/workflows/tests.yml`: tests, formatting, dependency validation, and package build on pushes/PRs.
-- Both daily workflows start at **11:00 AM Europe/Madrid**, using GitHub's native `timezone` setting so Spain's DST changes are automatic. This timezone controls scheduling only: edition dates, game times, narration, filenames, and RSS dates remain **America/New_York**.
-- The downstream `nba-daily-summary-podcast` publisher waits up to **90 minutes** for the canonical audio upload, then updates RSS. Publication follows successful generation; it is not guaranteed to occur at exactly 11:00, and GitHub can delay scheduled runs. A missing upload after the deadline fails visibly instead of silently skipping the episode.
+- Both daily workflows start at **11:10 AM Europe/Madrid**, using GitHub's native `timezone` setting so Spain's DST changes are automatic. This timezone controls scheduling only: edition dates, game times, narration, filenames, and RSS dates remain **America/New_York**.
+- The downstream `nba-daily-summary-podcast` publisher waits up to **90 minutes** for the canonical audio upload, then updates RSS. Publication follows successful generation; it is not guaranteed to occur at exactly 11:10, and GitHub can delay scheduled runs. The ten-minute offset avoids the top-of-hour load peak but does not guarantee punctual execution. A missing upload after the deadline fails visibly instead of silently skipping the episode.
 - Both workflows accept the same **Eastern** `edition_date` for manual/backfill runs.
 - Activation requires merging the task PRs into each repository's default branch and enabling both previously disabled scheduled workflows. Enabling before merge would run the old default-branch code.
 - Daily workflow secrets: `GOOGLE_API_KEY` and `GOOGLE_APPLICATION_CREDENTIALS` (the JSON credential document). Temporary credential files are permission-restricted and cleaned up.
