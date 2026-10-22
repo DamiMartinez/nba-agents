@@ -39,16 +39,16 @@ def test_narration_policy_uses_only_eastern_game_times():
     assert "Europe/Madrid" not in root_agent.instruction
 
 
-def test_workflow_starts_at_eleven_madrid_with_native_dst_support():
+def test_workflow_starts_at_eleven_ten_madrid_with_native_dst_support():
     workflow = Path(__file__).resolve().parents[2] / ".github/workflows/daily-agent.yml"
     text = workflow.read_text()
-    assert "cron: '0 11 * * *'" in text
+    assert "cron: '10 11 * * *'" in text
     assert "timezone: 'Europe/Madrid'" in text
 
 
 def test_madrid_schedule_keeps_eastern_edition_date_in_all_dst_seasons():
     for day in ("2026-01-15", "2026-03-20", "2026-07-15", "2026-10-28"):
-        scheduled = datetime.fromisoformat(day + "T11:00:00").replace(
+        scheduled = datetime.fromisoformat(day + "T11:10:00").replace(
             tzinfo=ZoneInfo("Europe/Madrid")
         )
         assert game_data.edition_date(scheduled).isoformat() == day
