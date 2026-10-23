@@ -39,16 +39,20 @@ def test_narration_policy_uses_only_eastern_game_times():
     assert "Europe/Madrid" not in root_agent.instruction
 
 
-def test_workflow_starts_at_eleven_ten_madrid_with_native_dst_support():
+def test_workflow_supports_external_dispatch_without_builtin_schedule():
     workflow = Path(__file__).resolve().parents[2] / ".github/workflows/daily-agent.yml"
     text = workflow.read_text()
-    assert "cron: '10 11 * * *'" in text
-    assert "timezone: 'Europe/Madrid'" in text
+    assert "workflow_dispatch:" in text
+    assert "edition_date:" in text
+    assert "\n  schedule:" not in text
+    assert "cron:" not in text
 
 
-def test_madrid_schedule_keeps_eastern_edition_date_in_all_dst_seasons():
-    for day in ("2026-01-15", "2026-03-20", "2026-07-15", "2026-10-28"):
-        scheduled = datetime.fromisoformat(day + "T11:10:00").replace(
-            tzinfo=ZoneInfo("Europe/Madrid")
-        )
-        assert game_data.edition_date(scheduled).isoformat() == day
+def test_external_caller_timezone_does_not_choose_edition_date():
+    for instant, zone, expected in (
+        ("2026-01-02T00:30:00", "Europe/Madrid", "2026-01-01"),
+        ("2026-07-02T00:30:00", "Europe/Madrid", "2026-07-01"),
+        ("2026-11-01T06:30:00", "UTC", "2026-11-01"),
+    ):
+        called_at = datetime.fromisoformat(instant).replace(tzinfo=ZoneInfo(zone))
+        assert game_data.edition_date(called_at).isoformat() == expected

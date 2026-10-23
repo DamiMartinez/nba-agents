@@ -104,10 +104,10 @@ Tests mock network, LLM, and storage calls; they require no credentials. Coverag
 ## Automation
 
 - `.github/workflows/tests.yml`: tests, formatting, dependency validation, and package build on pushes/PRs.
-- Both daily workflows start at **11:10 AM Europe/Madrid**, using GitHub's native `timezone` setting so Spain's DST changes are automatic. This timezone controls scheduling only: edition dates, game times, narration, filenames, and RSS dates remain **America/New_York**.
-- The downstream `nba-daily-summary-podcast` publisher waits up to **90 minutes** for the canonical audio upload, then updates RSS. Publication follows successful generation; it is not guaranteed to occur at exactly 11:10, and GitHub can delay scheduled runs. The ten-minute offset avoids the top-of-hour load peak but does not guarantee punctual execution. A missing upload after the deadline fails visibly instead of silently skipping the episode.
-- Both workflows accept the same **Eastern** `edition_date` for manual/backfill runs.
-- Activation requires merging the task PRs into each repository's default branch and enabling both previously disabled scheduled workflows. Enabling before merge would run the old default-branch code.
+- Generation and publication have **no built-in GitHub cron schedules**. An external system or a manual `workflow_dispatch` starts them. Both must be enabled for dispatch to work; enabling them after the schedule-removal PRs are merged does not restore cron execution.
+- The external caller should dispatch generation first and publication after it succeeds. The publisher can also be dispatched concurrently and will wait up to **90 minutes** for the canonical audio upload; a missing upload after the deadline fails visibly.
+- Pass the same **Eastern** `edition_date` to both workflows. If omitted, each chooses today's date in **America/New_York**, independent of the external caller's timezone. Explicit dates are recommended so a dispatch spanning midnight cannot select mismatched editions.
+- Scheduling belongs to the external system. Episode dates, game times, narration, filenames, and RSS dates remain Eastern. Do not reintroduce GitHub cron without approval.
 - Daily workflow secrets: `GOOGLE_API_KEY` and `GOOGLE_APPLICATION_CREDENTIALS` (the JSON credential document). Temporary credential files are permission-restricted and cleaned up.
 
 ## Structure
