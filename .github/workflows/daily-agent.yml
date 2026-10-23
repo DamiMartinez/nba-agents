@@ -1,10 +1,6 @@
 name: Daily NBA Agent Execution
 
 on:
-  schedule:
-    # Avoid the top-of-hour scheduler peak; content dates remain New York time.
-    - cron: '10 11 * * *'
-      timezone: 'Europe/Madrid'
   workflow_dispatch:
     inputs:
       edition_date:
