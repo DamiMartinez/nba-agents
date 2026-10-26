@@ -103,6 +103,7 @@ Tests mock network, LLM, and storage calls; they require no credentials. Coverag
 
 ## Automation
 
+- Cloud scheduling source and deployment/runbook: [`infrastructure/cloud-scheduler`](infrastructure/cloud-scheduler/README.md). The managed orchestrator targets **11:00 Europe/Madrid**, dispatches generation first, and starts publication only after its exact run succeeds. Deployment leaves the trigger paused until the dedicated GitHub credential and scheduler invocation permission are configured and validated.
 - `.github/workflows/tests.yml`: tests, formatting, dependency validation, and package build on pushes/PRs.
 - Generation and publication have **no built-in GitHub cron schedules**. An external system or a manual `workflow_dispatch` starts them. Both must be enabled for dispatch to work; enabling them after the schedule-removal PRs are merged does not restore cron execution.
 - The external caller should dispatch generation first and publication after it succeeds. The publisher can also be dispatched concurrently and will wait up to **90 minutes** for the canonical audio upload; a missing upload after the deadline fails visibly.

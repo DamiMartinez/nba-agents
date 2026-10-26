@@ -1,0 +1,215 @@
+# Google Cloud Workflows. Deploy with call logging NONE and BASIC history.
+# No secrets belong in this file. The GitHub credential lives in Secret Manager.
+main:
+  params: [args]
+  steps:
+    - initialize:
+        assign:
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - edition: ${text.substring(time.format(sys.now(), "America/New_York"), 0, 10)}
+          - dry_run: ${default(map.get(args, "dry_run"), false)}
+          - repositories: [nba-agents, nba-daily-summary-podcast]
+          - workflows: [daily-agent.yml, publish_podcast.yml]
+          - state_bucket: ${sys.get_env("STATE_BUCKET")}
+          - secret_id: ${sys.get_env("GITHUB_SECRET")}
+    - authenticate:
+        call: googleapis.secretmanager.v1.projects.secrets.versions.accessString
+        args:
+          project_id: ${project}
+          secret_id: ${secret_id}
+          version: latest
+        result: github_token
+    - headers:
+        assign:
+          - github_headers:
+              Authorization: ${"Bearer " + github_token}
+              Accept: application/vnd.github+json
+              X-GitHub-Api-Version: '2026-03-10'
+    - preflight:
+        for:
+          value: index
+          range: [0, 1]
+          steps:
+            - check_enabled:
+                call: github_get
+                args:
+                  url: ${"https://api.github.com/repos/DamiMartinez/" + repositories[index] + "/actions/workflows/" + workflows[index]}
+                  headers: ${github_headers}
+                result: definition
+            - require_enabled:
+                switch:
+                  - condition: ${definition.body.state != "active"}
+                    raise: ${"Workflow disabled in " + repositories[index]}
+            - check_previous_runs:
+                for:
+                  value: status
+                  in: [queued, in_progress, waiting, pending, requested]
+                  steps:
+                    - list_active:
+                        call: github_get
+                        args:
+                          url: ${"https://api.github.com/repos/DamiMartinez/" + repositories[index] + "/actions/workflows/" + workflows[index] + "/runs?per_page=1&status=" + status}
+                          headers: ${github_headers}
+                        result: active
+                    - prevent_overlap:
+                        switch:
+                          - condition: ${active.body.total_count > 0}
+                            raise: ${"An earlier workflow is still active in " + repositories[index] + ". Nothing dispatched."}
+    - dry_run_exit:
+        switch:
+          - condition: ${dry_run}
+            return:
+              status: preflight_passed
+              edition_date: ${edition}
+              message: Both workflows enabled and idle. No dispatches or daily claims created.
+    - claim_daily_edition:
+        try:
+          call: http.post
+          args:
+            url: ${"https://storage.googleapis.com/upload/storage/v1/b/" + state_bucket + "/o"}
+            auth:
+              type: OAuth2
+            query:
+              uploadType: media
+              name: ${"editions/" + edition + ".json"}
+              ifGenerationMatch: 0
+            headers:
+              Content-Type: application/json
+            body:
+              edition_date: ${edition}
+              execution: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+              status: claimed
+            timeout: 30
+          result: claim
+        except:
+          as: error
+          steps:
+            - existing_claim:
+                switch:
+                  - condition: ${map.get(error, "code") == 412}
+                    return:
+                      status: duplicate_skipped
+                      edition_date: ${edition}
+                      message: Edition already claimed. Review its original execution before any manual recovery.
+            - claim_failed:
+                raise: Daily claim failed or its outcome is uncertain. Nothing dispatched; inspect state before retrying.
+    - generate:
+        call: dispatch_and_wait
+        args:
+          repository: nba-agents
+          workflow: daily-agent.yml
+          edition: ${edition}
+          headers: ${github_headers}
+          bucket: ${state_bucket}
+          timeout_seconds: 7200
+        result: generation
+    - publish:
+        call: dispatch_and_wait
+        args:
+          repository: nba-daily-summary-podcast
+          workflow: publish_podcast.yml
+          edition: ${edition}
+          headers: ${github_headers}
+          bucket: ${state_bucket}
+          timeout_seconds: 7200
+        result: publication
+    - finish:
+        return:
+          status: success
+          edition_date: ${edition}
+          generation: ${generation}
+          publication: ${publication}
+
+github_get:
+  params: [url, headers]
+  steps:
+    - request:
+        try:
+          call: http.get
+          args:
+            url: ${url}
+            headers: ${headers}
+            timeout: 30
+          result: response
+        retry: ${http.default_retry}
+        except:
+          as: error
+          steps:
+            - safe_error:
+                # Do not rethrow HTTP request metadata containing auth headers.
+                raise: ${"GitHub read failed for " + url + "; HTTP code " + string(default(map.get(error, "code"), 0))}
+    - done:
+        return: ${response}
+
+dispatch_and_wait:
+  params: [repository, workflow, edition, headers, bucket, timeout_seconds]
+  steps:
+    - initialize:
+        assign:
+          - api: ${"https://api.github.com/repos/DamiMartinez/" + repository}
+          - deadline: ${sys.now() + timeout_seconds}
+    - dispatch_once:
+        # POST is deliberately NOT retried. A lost response may still mean a run started.
+        try:
+          call: http.post
+          args:
+            url: ${api + "/actions/workflows/" + workflow + "/dispatches"}
+            headers: ${headers}
+            body:
+              ref: main
+              inputs:
+                edition_date: ${edition}
+            timeout: 30
+          result: dispatched
+        except:
+          as: error
+          steps:
+            - uncertain_dispatch:
+                raise: ${"Dispatch failed or outcome unknown in " + repository + ". Do not retry automatically. Inspect GitHub and the edition claim."}
+    - require_exact_run:
+        switch:
+          - condition: ${dispatched.code != 200 or map.get(dispatched.body, "workflow_run_id") == null}
+            raise: ${"GitHub did not return an exact run ID for " + repository + ". Inspect GitHub before retrying."}
+    - remember_run:
+        assign:
+          - run_id: ${dispatched.body.workflow_run_id}
+          - run_url: ${dispatched.body.html_url}
+    - persist_run:
+        call: http.post
+        args:
+          url: ${"https://storage.googleapis.com/upload/storage/v1/b/" + bucket + "/o"}
+          auth:
+            type: OAuth2
+          query:
+            uploadType: media
+            name: ${"runs/" + edition + "/" + repository + ".json"}
+            ifGenerationMatch: 0
+          headers:
+            Content-Type: application/json
+          body:
+            run_id: ${run_id}
+            html_url: ${run_url}
+            edition_date: ${edition}
+          timeout: 30
+    - read_run:
+        call: github_get
+        args:
+          url: ${api + "/actions/runs/" + string(run_id)}
+          headers: ${headers}
+        result: run
+    - decide:
+        switch:
+          - condition: ${run.body.status == "completed" and run.body.conclusion == "success"}
+            return:
+              run_id: ${run_id}
+              html_url: ${run_url}
+              conclusion: success
+          - condition: ${run.body.status == "completed"}
+            raise: '${"Workflow failed (" + string(run.body.conclusion) + "): " + run_url}'
+          - condition: ${sys.now() >= deadline}
+            raise: ${"Timed out waiting for " + run_url + ". The GitHub run may still be active; inspect before retrying."}
+    - wait:
+        call: sys.sleep
+        args:
+          seconds: 60
+        next: read_run
