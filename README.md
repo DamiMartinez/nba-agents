@@ -83,9 +83,36 @@ Inside `nba-publisher-agent/`:
 - `reports/nba_YYYY-MM-DD.json`: frozen source snapshot, including game IDs, collection timestamps, and queried dates.
 - `reports/nba_YYYY-MM-DD.md`: final agent report after confirmed publication.
 - `reports/nba_YYYY-MM-DD.script.txt`: exact narration submitted to TTS (saved before the API request).
+- `reports/nba_YYYY-MM-DD.metadata.json`: editorial title/description, Eastern edition date, and WAV SHA-256.
 - `audios/nba_daily_summary_podcast_YYYY-MM-DD.wav`: generated audio.
 
-Local output folders are ignored by Git. Daily Actions runs retain reports/audio as artifacts. This repository uploads audio; it does **not** implement the downstream RSS/Spotify feed updater. Re-running an edition can replace its audio object; cross-run idempotency is not yet implemented.
+Local output folders are ignored by Git. Daily Actions runs retain reports/audio as artifacts. This repository uploads audio and a matching public `nba_daily_summary_podcast_YYYY-MM-DD.metadata.json` sidecar; it does **not** implement the downstream RSS/Spotify feed updater. Re-running an edition can replace its audio object; cross-run idempotency is not yet implemented.
+
+### Episode titles and descriptions
+
+After drafting the narration, the producer chooses the strongest verified story
+and calls `set_episode_metadata`. Titles lead with a searchable player/team and
+an active, concrete NBA hook (target 55–85 characters, maximum 110); the RSS
+publisher appends the Eastern edition date. Descriptions use three substantial
+sentences (roughly 70–120 words, 200–1000 characters), with a compelling first
+90 characters and useful context in the first 250. They extend the title with
+specific story context, secondary highlights, and the covered upcoming slate,
+without keyword stuffing, boilerplate, or claims absent from the narration.
+Quiet days get an honest schedule-led or no-games angle, not fabricated drama.
+
+These rules follow Spotify's [podcast SEO guidance](https://creators.spotify.com/es-ES/resources/podcast-seo)
+and [episode-description advice](https://creators.spotify.com/es-ES/resources/podcast-episode-descriptions).
+Length/date checks are deterministic; editorial quality and factual grounding
+remain LLM instructions, not an independent semantic fact-checker.
+
+Upload requires current-edition metadata and succeeds only after both WAV and
+JSON are public. The JSON is uploaded last and includes the WAV SHA-256 so the
+publisher can reject stale pairs. Metadata is not sent to TTS. Deploy this
+producer change **before** the corresponding publisher change: new publication
+requires a valid sidecar, with no generic-copy fallback. Older audio-only editions
+need reviewed metadata generation before a new backfill publication. Existing
+RSS entries are not rewritten by this feature. No live generation is required to
+merge these changes.
 
 ## Development
 

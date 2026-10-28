@@ -1,4 +1,7 @@
+import hashlib
+import json
 import os
+from pathlib import Path
 from typing import Dict
 from google.cloud import storage
 from google.adk.tools.tool_context import ToolContext
@@ -32,6 +35,24 @@ def upload_to_gcs(
             "message": "Only the current edition's generated audio can be uploaded",
         }
     try:
+        metadata = tool_context.state.get("episode_metadata")
+        if not metadata or metadata.get("edition_date") != tool_context.state.get(
+            "edition_date"
+        ):
+            raise ValueError("Current edition metadata is required before upload")
+        # Bind copy to the exact WAV; the publisher rejects stale/mismatched pairs.
+        metadata = {
+            **metadata,
+            "audio_sha256": hashlib.sha256(
+                Path(local_file_path).read_bytes()
+            ).hexdigest(),
+        }
+        metadata_json = json.dumps(metadata, ensure_ascii=False, indent=2)
+        reports = Path("reports")
+        reports.mkdir(exist_ok=True)
+        (reports / f"nba_{metadata['edition_date']}.metadata.json").write_text(
+            metadata_json, encoding="utf-8"
+        )
         # Check if GOOGLE_APPLICATION_CREDENTIALS is set
         credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if not credentials_path:
@@ -63,6 +84,11 @@ def upload_to_gcs(
 
         # Make the file public
         blob.make_public()
+
+        # Upload the sidecar last, as the publication-ready marker.
+        metadata_blob = bucket.blob(Path(filename).with_suffix(".metadata.json").name)
+        metadata_blob.upload_from_string(metadata_json, content_type="application/json")
+        metadata_blob.make_public()
 
         tool_context.state["audio_uploaded"] = True
         return {
