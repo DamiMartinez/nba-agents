@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from google.adk.sessions.state import State
 from google.genai.types import Content, Part
 
 import run_agent
@@ -18,11 +19,14 @@ def upload_context(tmp_path):
     audio = tmp_path / "nba_daily_summary_podcast_2026-01-02.wav"
     audio.write_bytes(b"audio fixture")
     context = SimpleNamespace(
-        state={
-            "edition_date": "2026-01-02",
-            "audio_generated": True,
-            "audio_file_path": str(audio),
-        }
+        state=State(
+            {
+                "edition_date": "2026-01-02",
+                "audio_generated": True,
+                "audio_file_path": str(audio),
+            },
+            {},
+        )
     )
     assert (
         set_episode_metadata(
