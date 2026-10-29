@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from google.adk.sessions.state import State
 
 from nba_publisher_agent.tools.set_episode_metadata_tool import set_episode_metadata
 from nba_publisher_agent.tools import upload_to_gcs_tool as upload_tool
@@ -21,11 +22,40 @@ from test_publication import upload_context
     ],
 )
 def test_invalid_copy_clears_stale_metadata(title, description):
+    delta = {}
     context = SimpleNamespace(
-        state={"edition_date": "2026-01-02", "episode_metadata": {"old": True}}
+        state=State(
+            {"edition_date": "2026-01-02", "episode_metadata": {"old": True}}, delta
+        )
     )
     assert set_episode_metadata(title, description, context)["status"] == "error"
-    assert "episode_metadata" not in context.state
+    assert context.state.get("episode_metadata") is None
+    assert delta["episode_metadata"] is None
+
+
+@pytest.mark.parametrize("previous", [None, {"title": "Stale copy"}])
+def test_valid_metadata_updates_real_adk_state_and_delta(previous):
+    delta = {}
+    context = SimpleNamespace(
+        state=State(
+            {
+                "edition_date": "2026-10-29",
+                "episode_metadata": previous,
+            },
+            delta,
+        )
+    )
+    title = "Boston edges New York in a tense NBA finish"
+    description = "A" * 200
+    result = set_episode_metadata(title, description, context)
+    assert result["status"] == "success"
+    expected = {
+        "edition_date": "2026-10-29",
+        "title": title,
+        "description": description,
+    }
+    assert context.state["episode_metadata"] == expected
+    assert delta["episode_metadata"] == expected
 
 
 @pytest.mark.parametrize("metadata", [None, {"edition_date": "2026-01-01"}])

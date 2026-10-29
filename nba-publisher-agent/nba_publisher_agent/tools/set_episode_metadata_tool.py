@@ -13,7 +13,9 @@ def set_episode_metadata(
     Call after drafting the narration, before handing it to the podcaster.
     Neither field is spoken by TTS. Facts must come from that narration.
     """
-    tool_context.state.pop("episode_metadata", None)
+    # ADK State is not a dict: assignment records a session-state delta;
+    # dict.pop() is unsupported. Invalidate stale copy before validation.
+    tool_context.state["episode_metadata"] = None
     day = tool_context.state.get("edition_date", "")
     try:
         date.fromisoformat(day)

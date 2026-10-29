@@ -124,7 +124,9 @@ poetry run black --check .
 poetry build
 ```
 
-Tests mock network, LLM, and storage calls; they require no credentials. Coverage includes midnight/date boundaries, DST transitions and mismatch weeks, duplicate games, all season types, incomplete results, postponed/cancelled games, source failures, WAV validation, and publication failure handling.
+Tests mock network, LLM, and storage calls; they require no credentials. Metadata
+and upload tests use ADK's real `State` wrapper (including pending state deltas),
+not a plain dictionary, to catch runtime API incompatibilities. Coverage includes midnight/date boundaries, DST transitions and mismatch weeks, duplicate games, all season types, incomplete results, postponed/cancelled games, source failures, WAV validation, and publication failure handling.
 
 `poetry.lock` pins the complete dependency graph. To update it deliberately, edit dependency constraints, run `poetry lock`, and rerun checks. Unused NBA API, AI Platform/deployment extras, and unrelated ML/test dependencies were removed; `python-dotenv` is now explicit.
 
